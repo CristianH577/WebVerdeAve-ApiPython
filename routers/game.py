@@ -1,236 +1,145 @@
 from fastapi import APIRouter, HTTPException, Form
 
-from pydantic import BaseModel, Field
-from typing import Annotated, Union, Dict
+# from fastapi import Request
+# from pydantic import BaseModel
+
+from typing import Annotated
 
 from json import loads
 import copy
 
-from src.files.map import map
-from src.files.mobs import list_mobs
-from src.files.items import class_item, list_items
+from libs.game.models import class_char
+from src.files.game.map import map
+from src.files.game.mobs import list_mobs
+from src.files.game.items import list_items
+from src.files.game.chars import levels, test_char_data, admin_char_data
 
 
 # configs ----------------------------------------------------------------------
 router = APIRouter(
-    prefix="/chars", tags=["chars"], responses={404: {"error": "error router chars"}}
+    prefix="/game", tags=["game"], responses={404: {"error": "Error de router juego"}}
 )
 
 
 # consts  ----------------------------------------------------------------------
-class class_char(BaseModel):
-    id: int
-    name: str
-    clase: str
-    stats: Dict[str, int] = Field(
-        default={
-            "damage": 1,
-            "defence": 1,
-            "hp": 1,
-            "hp_max": 1,
-        }
-    )
-    xp: int = Field(default=0)
-    level: int = Field(default=1)
-    inventory: Dict[int, class_item] = Field(default={})
-    map: dict = Field(
-        default={
-            "a": {1: {"kind": "wall"}},
-            "b": {1: {"kind": "empty"}},
-            "c": {1: {"kind": "wall"}},
-        }
-    )
-    effects: dict = Field(default={})
-    loc: list = Field(default=["a", 1])
-    mob: dict = Field(default={})
-
-
-levels = {
-    1: range(3),
-    2: range(4, 7),
-    3: range(8, 13),
-    4: range(14, 23),
-}
-
-test_char_data = {
-    "id": 2,
-    "name": "kolimba",
-    "clase": "warrior",
-    "stats": {
-        "damage": 99,
-        "defence": 3,
-        "hp": 4,
-        "hp_max": 4,
-    },
-    "inventory": {
-        3: class_item(
-            id=3,
-            name="Espada larga",
-            kind="arma",
-            effect=["damage", 1],
-            desc="El tamaño importa a la hora de clavarla",
-            quantity=1,
-        ),
-        5: class_item(
-            id=5,
-            name="Armadura de cuero",
-            kind="armadura",
-            effect=[],
-            desc="Armadura hecha con piel de zorra",
-            quantity=1,
-        ),
-        # 9: class_item(
-        #     id=9,
-        #     name="Antorcha",
-        #     kind="misc",
-        #     effect=["iluminate", 1],
-        #     desc="Un palo con fuego",
-        #     quantity=99,
-        # ),
-    },
-}
-admin_char_data = {
-    "id": 1,
-    "name": "kolimba admin",
-    "clase": "warrior",
-    "stats": {
-        "damage": 99,
-        "defence": 3,
-        "hp": 3,
-        "hp_max": 4,
-    },
-    "inventory": {
-        3: class_item(
-            id=3,
-            name="Espada larga",
-            kind="arma",
-            effect=["damage", 1],
-            desc="El tamaño importa a la hora de clavarla",
-            quantity=1,
-        ),
-        5: class_item(
-            id=5,
-            name="Armadura de cuero",
-            kind="armadura",
-            effect=[],
-            desc="Armadura hecha con piel de zorra",
-            quantity=1,
-        ),
-        1: class_item(
-            id=1,
-            name="Pocion de vida",
-            kind="consumible",
-            effect=["hp", 1],
-            desc="Restaura vida al consumirse",
-            quantity=1,
-        ),
-        8: class_item(
-            id=8,
-            name="Llave maestra",
-            kind="misc",
-            effect=[],
-            desc="Algo 'maestro' debe abrir",
-            quantity=1,
-        ),
-        7: class_item(
-            id=7,
-            name="Llave",
-            kind="misc",
-            effect=[],
-            desc="Algo debe abrir",
-            quantity=1,
-        ),
-    },
-    "map": {
-        "a": {1: {"kind": "wall"}},
-        "b": {1: {"kind": "empty"}},
-        "c": {1: {"kind": "wall"}},
-    },
-}
-
-list_class_default = [admin_char_data, test_char_data]
+list_class_default = [class_char(**admin_char_data), class_char(**test_char_data)]
 list_class = [class_char(**admin_char_data), class_char(**test_char_data)]
 
 
 # functions --------------------------------------------------------------------------------
-def searchCharDefaultById(id: int):
-    e = filter(lambda x: x["id"] == id, list_class_default)
-    e = list(e)[0]
-    try:
-        return copy.deepcopy(e)
-    except:
-        raise HTTPException(status_code=404, detail="personaje default no encontrado")
-
-
-def searchCharById(id: int):
-    e = filter(lambda x: x.id == id, list_class)
-    e = list(e)[0]
-    try:
-        return copy.deepcopy(e)
-    except:
-        raise HTTPException(status_code=404, detail="personaje no encontrado")
-
-
-def searchChar(filters: dict):
-    def Filt(x):
-        found = False
-        dic_x = x.dict()
-        keys = list(dic_x.keys())
-        for k, v in filters.items():
-            if not v in (0, "") and k in keys:
-                if v == dic_x[k]:
-                    found = True
-                else:
-                    found = False
-                    break
-        return found
-
-    e = filter(Filt, list_class)
+# searchs
+async def searchItemById(id: int):
+    e = filter(lambda x: x.id == id, list_items)
     e = list(e)
     try:
-        return copy.deepcopy(e)
+        return copy.deepcopy(e[0])
     except:
-        raise HTTPException(status_code=404, detail="no encontrado")
+        raise HTTPException(status_code=404, detail=f"Objeto no encontrado: {id}")
 
 
-def searchItemById(id: int):
-    e = filter(lambda x: x.id == id, list_items)
-    e = list(e)[0]
+async def searchCharById(id: int):
+    e = filter(lambda x: x.id == id, list_class)
+    e = list(e)
     try:
-        return copy.deepcopy(e)
+        return copy.deepcopy(e[0])
     except:
-        raise HTTPException(status_code=404, detail="item no encontrado")
+        raise HTTPException(status_code=404, detail=f"Personaje no encontrado: {id}")
 
 
-def searchMobById(id: int):
+async def searchCharDefaultById(id: int):
+    e = filter(lambda x: x.id == id, list_class_default)
+    e = list(e)
+    try:
+        return copy.deepcopy(e[0])
+    except:
+        raise HTTPException(
+            status_code=404, detail=f"Personaje por defecto no encontrado: {id}"
+        )
+
+
+async def searchMobById(id: int):
     e = filter(lambda x: x.id == id, list_mobs)
-    e = list(e)[0]
+    e = list(e)
     try:
-        return copy.deepcopy(e)
+        return copy.deepcopy(e[0])
     except:
-        raise HTTPException(status_code=404, detail="mob no encontrado")
+        raise HTTPException(status_code=404, detail=f"Enemigo no encontrado: {id}")
 
 
-async def updateChar(char: class_char):
-    found = False
+# def searchChar(filters: dict):
+#     def Filt(x):
+#         found = False
+#         dic_x = x.dict()
+#         keys = list(dic_x.keys())
+#         for k, v in filters.items():
+#             if not v in (0, "") and k in keys:
+#                 if v == dic_x[k]:
+#                     found = True
+#                 else:
+#                     found = False
+#                     break
+#         return found
 
-    for i, x in enumerate(list_class):
-        if x.id == char.id:
-            list_class[i] = char
-            found = True
-            break
-
-    if not found:
-        raise HTTPException(status_code=404, detail="no existe")
+#     e = filter(Filt, list_class)
+#     e = list(e)
+#     try:
+#         return copy.deepcopy(e)
+#     except:
+#         raise HTTPException(status_code=404, detail="no encontrado")
 
 
-def updateMapAll(char: class_char):
-    if not char:
-        raise HTTPException(status_code=404, detail="no char")
+# misc
+async def selectClass(clase: str, char: class_char):
+    add_items = False
 
-    if isinstance(char, int):
-        char = searchCharById(char)
+    if clase == "mage":
+        add_items = {4: 1, 6: 1}
+    elif clase == "warrior":
+        add_items = {3: 1, 5: 1}
+    elif clase == "tank":
+        add_items = {11: 1, 12: 1}
 
+    if add_items:
+        return await updateInventory(add_items, char)
+    else:
+        return HTTPException(status_code=400, detail="Error en seleccion de clase")
+
+
+async def updateInventory(items: dict, char: class_char):
+    adquired = []
+    for k in items.keys():
+        item = await searchItemById(k)
+
+        if k in char.inventory:
+            char.inventory[k].quantity += items[k]
+        else:
+            item.quantity = items[k]
+            char.inventory[k] = item
+
+        if char.inventory[k].quantity <= 0:
+            del char.inventory[k]
+
+        if item.kind in ["misc", "armadura", "arma"]:
+            if item.effect:
+                effect = item.effect
+                val = effect[1] * items[k]
+                try:
+                    char.effects[effect[0]] += val
+                except:
+                    char.effects[effect[0]] = val
+
+                if char.effects[effect[0]] <= 0:
+                    del char.effects[effect[0]]
+
+                if effect[0] in char.stats.keys():
+                    char.stats[effect[0]] += val
+
+        adquired.append(item.name)
+
+    return {"char": char, "msg_list": ["Has adquirido: " + ", ".join(adquired)]}
+
+
+async def updateMapAll(char: class_char):
     cols = list(map["base"].keys())
     for col in cols:
         char.map[col] = {}
@@ -268,7 +177,7 @@ def updateMapAll(char: class_char):
     return char
 
 
-def updateMap(x: str, y: int, char: class_char):
+async def updateMap(x: str, y: int, char: class_char):
     cols = list(map["base"].keys())
     try:
         ix = cols.index(x)
@@ -277,6 +186,7 @@ def updateMap(x: str, y: int, char: class_char):
 
     doors = map["doors"].keys()
 
+    # bloques circundantes a mostrar
     ilum = 1
     try:
         ilum += char.effects["iluminate"]
@@ -439,7 +349,8 @@ def updateMap(x: str, y: int, char: class_char):
     return char
 
 
-def checkInteraction(x: str, y: int, block: str, char: class_char):
+async def checkInteraction(x: str, y: int, block: str, char: class_char):
+    # reviso si hay un mob
     try:
         xy_mob = char.mob["loc"]
         block = "mob"
@@ -467,112 +378,98 @@ def checkInteraction(x: str, y: int, block: str, char: class_char):
                 char.map[x][y]["interacted"] = 1
                 interacted = 1
 
-            r = interactions[interacted]
-            return [r, char]
+            return {"char": char, "msg_list": interactions[interacted]}
 
     return False
 
 
-def nextInteracted(x: str, y: int, char: class_char):
+async def updateChar(char: class_char):
+    found = False
+    for i, x in enumerate(list_class):
+        if x.id == char.id:
+            list_class[i] = char
+            found = True
+            break
+
+    if found:
+        return True
+    else:
+        raise HTTPException(
+            status_code=404, detail="No se encontro el personaje a actualizar"
+        )
+
+
+# events
+async def nextInteracted(x: str, y: int, char: class_char):
     if [x, y] == ["u", 4]:
         char.map[x][y]["interacted"] = 3
     else:
         char.map[x][y]["interacted"] = char.map[x][y]["interacted"] + 1
-    return [False, char]
+
+    return {"char": char}
 
 
-def updateInventory(items: dict, char: Union[class_char, int] = None):
-    if not char:
-        raise HTTPException(status_code=404, detail="no char")
-
-    if isinstance(char, int):
-        char = searchCharById(char)
-
-    adquired = []
-    for k in items.keys():
-        item = searchItemById(k)
-
-        if k in char.inventory:
-            char.inventory[k].quantity += items[k]
-        else:
-            item.quantity = items[k]
-            char.inventory[k] = item
-
-        if char.inventory[k].quantity <= 0:
-            del char.inventory[k]
-
-        if item.kind in ["misc", "armadura", "arma"]:
-            if item.effect:
-                effect = item.effect
-                val = effect[1] * items[k]
-                try:
-                    char.effects[effect[0]] += val
-                except:
-                    char.effects[effect[0]] = val
-
-                if char.effects[effect[0]] <= 0:
-                    del char.effects[effect[0]]
-
-                if effect[0] in char.stats.keys():
-                    char.stats[effect[0]] += val
-
-        adquired.append(item.name)
-
-    r = ["Has adquirido: " + ", ".join(adquired)]
-
-    return [r, char]
-
-
-def openChest(x: str, y: int, char: class_char):
+async def openChest(x: str, y: int, char: class_char):
     try:
         content = map["chests"][x, y]["content"]
     except:
-        raise HTTPException(status_code=404, detail="no content")
+        raise HTTPException(
+            status_code=404, detail="No se encontro el contenido del cofre"
+        )
 
     char.map[x][y]["interacted"] = "end"
 
-    back = updateInventory(content, char)
+    response = await updateInventory(content, char)
 
     if [x, y] == ["t", 6]:
         if char.map["r"][9]["kind"] == "wall":
             char.map["r"][9]["kind"] = "empty"
             char.map["r"][9]["interacted"] = "end"
-            back[0].append("Sientes un temblor, algo paso...")
+            response["msg_list"].append("Sientes un temblor, algo paso...")
 
-    return back
+    return response
 
 
-def openDoor(x: str, y: int, char: class_char):
+async def openDoor(x: str, y: int, char: class_char):
     try:
         door = map["doors"][x, y]["data"]
     except:
-        raise HTTPException(status_code=404, detail="no door")
+        raise HTTPException(status_code=404, detail="No se encontro la puerta")
 
-    open_door = False
-    r = False
-    if door["kind"] == "unlock":
-        open_door = True
-    elif door["kind"] == "lock":
+    response = False
+
+    kind = door["kind"]
+    open_door = True
+    new_keys = False
+    if kind == "unlock":
+        print()
+    elif kind == "lock":
         try:
             char_keys = char.inventory[7].quantity
         except:
             char_keys = 0
 
         if char_keys > 0:
-            open_door = True
-            char = updateInventory({7: -1}, char)[1]
+            new_keys = {7: -1}
+        else:
+            open_door = False
 
-    elif door["kind"] == "end":
+    elif kind == "end":
         try:
             char_keys = char.inventory[8].quantity
         except:
             char_keys = 0
 
         if char_keys > 0:
-            open_door = True
-            char = updateInventory({8: -1}, char)[1]
+            new_keys = {8: -1}
+        else:
+            open_door = False
     else:
-        raise HTTPException(status_code=404, detail="unknow door kind")
+        raise HTTPException(status_code=404, detail="No se reconocio la puerta")
+
+    if new_keys:
+        update = await updateInventory(new_keys, char)
+        char = update["char"]
 
     interacted = char.map[x][y]["interacted"]
     if open_door:
@@ -587,12 +484,12 @@ def openDoor(x: str, y: int, char: class_char):
             char.map[x][y]["interacted"] = "end"
 
         try:
-            r = map["doors"][x, y]["open"][interacted]
+            response = map["doors"][x, y]["open"][interacted]
         except:
             False
     else:
         try:
-            r = map["doors"][x, y]["close"][interacted]
+            response = map["doors"][x, y]["close"][interacted]
 
             try:
                 map["doors"][x, y]["close"][interacted + 1]
@@ -609,7 +506,7 @@ def openDoor(x: str, y: int, char: class_char):
                 if interacted == 3:
                     interacted = 1
 
-            r = r_default[interacted]
+            response = r_default[interacted]
 
             if interacted == 1:
                 interacted = 2
@@ -618,14 +515,14 @@ def openDoor(x: str, y: int, char: class_char):
                 except:
                     False
 
-    return [r, char]
+    return {"char": char, "msg_list": response}
 
 
-def activateTrap(x: str, y: int, char: class_char):
+async def activateTrap(x: str, y: int, char: class_char):
     try:
         trap = map["traps"][x, y]["kind"]
     except:
-        raise HTTPException(status_code=404, detail="no trap")
+        raise HTTPException(status_code=404, detail="No se encontro el evento")
 
     r = []
     hp = False
@@ -655,12 +552,8 @@ def activateTrap(x: str, y: int, char: class_char):
             x_new = "r"
             y_new = 10
 
-        try:
-            char = updateMap(x_new, y_new, char)
-            char.loc = [x_new, y_new]
-        except:
-            raise HTTPException(status_code=400)
-
+        char = await updateMap(x_new, y_new, char)
+        char.loc = [x_new, y_new]
         char.map[x][y]["kind"] = "wall"
 
     if hp:
@@ -668,26 +561,83 @@ def activateTrap(x: str, y: int, char: class_char):
         r.append("Perdiste " + str(hp) + " de vida")
         char.map[x][y].update({"layer": "trap", "trap": trap, "interacted": "end"})
 
-    return [r, char]
+    return {"char": char, "msg_list": r}
 
 
-def fightWith(x: str, y: int, char: class_char):
+async def specialEvent(x: str, y: int, char: class_char):
+    back = False
+    r = False
+
+    if [x, y] == ["b", 1]:
+        char.map["b"][1]["interacted"] = "end"
+        back = await updateInventory({9: 1}, char)
+    elif [x, y] == ["b", 9]:
+        char.loc = ["b", 9]
+    elif [x, y] == ["c", 4]:
+        update = await updateInventory({9: 1}, char)
+        char = update["char"]
+        char.map["c"][4]["interacted"] = "end"
+        char.mob["loc"] = ["d", 4]
+        back = await openDoor(x, y, char)
+    elif [x, y] == ["d", 4]:
+        char.map["d"][4]["interacted"] = "end"
+        del char.map["d"][4]["layer"]
+        del char.map["d"][4]["mob"]
+    elif [x, y] == ["o", 16]:
+        open = await openDoor(x, y, char)
+        if open["msg_list"] == False:
+            char = open["char"]
+            char.mob["loc"] = ["p", 16]
+            back = await fightWith("p", 16, char)
+        else:
+            back = open
+    elif [x, y] == ["p", 6]:
+        char.map[x][y]["kind"] = "wall"
+        char.loc = ["o", 6]
+    elif [x, y] == ["r", 9]:
+        char.map[x][y]["kind"] = "wall"
+        char.loc = ["r", 8]
+    elif [x, y] == ["t", 16]:
+        try:
+            char.inventory[14]
+            r = ["El goblin toma la mascara, grita algo sobre los 'zurdos' y se va"]
+            del char.map["t"][16]["layer"]
+            del char.map["t"][16]["mob"]
+            char.map["t"][16]["interacted"] = "end"
+        except:
+            r = [
+                "Que paso? No tienes la mascara en el inventario",
+                {"msg": "Que vas a hacer", "options": ["fight", "leave"]},
+            ]
+    elif [x, y] == ["u", 4]:
+        r = "restart"
+
+    if back:
+        return back
+    else:
+        return {
+            "char": char,
+            "msg_list": r,
+        }
+
+
+async def fightWith(x: str, y: int, char: class_char):
     try:
-        mob_id = map["mobs"][x, y]["id_mob"]
+        id_mob = map["mobs"][x, y]["id_mob"]
     except:
-        raise HTTPException(status_code=404, detail="no mob")
+        raise HTTPException(status_code=404, detail="No se encontro al enemigo")
 
-    mob = searchMobById(mob_id)
+    mob = await searchMobById(id_mob)
 
     char.mob["data"] = mob
 
     if [x, y] == ["t", 2]:
         char.map["t"][3]["interacted"] = 3
 
-    return [False, char]
+    return {"char": char}
 
 
-def leaveFrom(x: str, y: int, char: class_char):
+async def leaveFrom(x: str, y: int, char: class_char):
     r = False
 
     if [x, y] == ["d", 4]:
@@ -706,7 +656,8 @@ def leaveFrom(x: str, y: int, char: class_char):
 
         if torch:
             r.append("Trabas la puerta con la antorcha para que no salga")
-            char = updateInventory({9: -1}, char)[1]
+            update = await updateInventory({9: -1}, char)
+            char = update["char"]
             char.mob = {}
             char.map["d"][4]["interacted"] = 2
             char.map["c"][4]["interacted"] = 3
@@ -821,102 +772,35 @@ def leaveFrom(x: str, y: int, char: class_char):
 
         char.loc = ["s", 18]
 
-    return [r, char]
-
-
-def specialEvent(x: str, y: int, char: class_char):
-    back = [False, char]
-
-    if [x, y] == ["b", 1]:
-        char.map["b"][1]["interacted"] = "end"
-        back = updateInventory({9: 1}, char)
-    elif [x, y] == ["b", 9]:
-        char.loc = ["b", 9]
-    elif [x, y] == ["c", 4]:
-        char = updateInventory({9: 1}, char)[1]
-        char.map["c"][4]["interacted"] = "end"
-        char.mob["loc"] = ["d", 4]
-        back = openDoor(x, y, char)
-    elif [x, y] == ["d", 4]:
-        char.map["d"][4]["interacted"] = "end"
-        del char.map["d"][4]["layer"]
-        del char.map["d"][4]["mob"]
-    elif [x, y] == ["o", 16]:
-        open = openDoor(x, y, char)
-        if open[0] == False:
-            char = open[1]
-            char.mob["loc"] = ["p", 16]
-            back = fightWith("p", 16, char)
-        else:
-            back = open
-    elif [x, y] == ["p", 6]:
-        char.map[x][y]["kind"] = "wall"
-        char.loc = ["o", 6]
-    elif [x, y] == ["r", 9]:
-        char.map[x][y]["kind"] = "wall"
-        char.loc = ["r", 8]
-    elif [x, y] == ["t", 16]:
-        try:
-            char.inventory[14]
-            back[0] = [
-                "El goblin toma la mascara, grita algo sobre los 'zurdos' y se va"
-            ]
-            del char.map["t"][16]["layer"]
-            del char.map["t"][16]["mob"]
-            char.map["t"][16]["interacted"] = "end"
-        except:
-            back[0] = [
-                "Que paso? No tienes la mascara en el inventario",
-                {"msg": "Que vas a hacer", "options": ["fight", "leave"]},
-            ]
-    elif [x, y] == ["u", 4]:
-        back[0] = "restart"
-
-    return back
-
-
-async def selectClass(clase: str, id_char: int):
-    add_items = False
-
-    if clase == "mage":
-        add_items = {4: 1, 6: 1}
-    elif clase == "warrior":
-        add_items = {3: 1, 5: 1}
-    elif clase == "tank":
-        add_items = {11: 1, 12: 1}
-
-    if add_items:
-        add = updateInventory(add_items, id_char)
-        await updateChar(add[1])
-        return add[0]
-    else:
-        raise HTTPException(status_code=404, detail="error clase")
+    return {
+        "char": char,
+        "msg_list": r,
+    }
 
 
 # methods ------------------------------------------------------------------------------------
-@router.get("/", status_code=200)
+
+@router.get("/")
 async def index():
-    return "chars"
+    return {"detail": "game"}
 
 
-@router.get("/getElementById/{id}", response_model={}, status_code=200)
-async def getElementById(id: int):
-    if not id:
-        raise HTTPException(status_code=400, detail="Error de formulario")
-
-    return {"value": searchCharById(id)}
+@router.post("/")
+async def index(num: int, text: str):
+    print(num, text)
 
 
-@router.post("/getElement", response_model=[], status_code=200)
-async def getElement(filters: dict):
-    if not filters:
-        raise HTTPException(status_code=400, detail="Error de formulario")
+# async def index(request: Request):
+#     data = await request.json()
+#     print(data)
+#     print(type(data['num']))
+#     print(type(data['text']))
 
-    return {"value": searchChar(filters)}
+# raise HTTPException(status_code=206, detail={"detail": "test"})
 
 
-@router.post("/add", status_code=201)
-async def add(data: Annotated[str, Form()] = None):
+@router.post("/add")
+async def add(data: dict):
     if not data:
         raise HTTPException(status_code=400, detail="Error de formulario")
 
@@ -930,15 +814,59 @@ async def add(data: Annotated[str, Form()] = None):
 
     new_id = last_char_id + 1
 
-    data_dict = loads(data)
-    data_dict["id"] = new_id
+    data["id"] = new_id
 
-    list_class_default.append(data_dict)
-    list_class.append(class_char(**data_dict))
+    char = class_char(**data)
 
-    await selectClass(data_dict["clase"], new_id)
+    response = await selectClass(data["clase"], char)
 
-    return {"value": new_id}
+    if isinstance(response, dict):
+        char = response["char"]
+        list_class_default.append(char)
+        list_class.append(char)
+        return {"value": new_id}
+
+    elif isinstance(response, HTTPException):
+        raise response
+
+    else:
+        raise HTTPException(status_code=400, detail="Error al crear personaje")
+
+
+@router.get("/getElementById/{id}")
+async def getElementById(id: int):
+    if not id:
+        raise HTTPException(status_code=400, detail="Error de formulario")
+
+    char = await searchCharById(id)
+
+    return {"value": char}
+
+
+# @router.post("/getElement", response_model=[])
+# async def getElement(filters: dict):
+#     if not filters:
+#         raise HTTPException(status_code=400, detail="Error de formulario")
+
+#     return {"value": searchChar(filters)}
+
+
+@router.get("/restart/{id}", status_code=204)
+async def restart(id: int):
+    if not id:
+        raise HTTPException(status_code=400, detail="Error de formulario")
+
+    char_def = await searchCharDefaultById(id)
+
+    found = False
+    for k, y in enumerate(list_class):
+        if y.id == id:
+            list_class[k] = char_def
+            found = True
+            break
+
+    if not found:
+        raise HTTPException(status_code=404, detail="No se encontro al personaje")
 
 
 @router.delete("/{id}", status_code=204)
@@ -950,15 +878,14 @@ async def delete(id: int):
         await restart(id)
     else:
         found = False
-
         for i, x in enumerate(list_class_default):
-            if x["id"] == id:
+            if x.id == id:
                 found = True
                 break
 
         if not found:
             raise HTTPException(
-                status_code=404, detail="No existe informacion del personaje"
+                status_code=404, detail="No se encontro personaje por defecto"
             )
 
         found = False
@@ -968,57 +895,11 @@ async def delete(id: int):
                 break
 
         if not found:
-            raise HTTPException(status_code=404, detail="Personaje no encontrada")
+            raise HTTPException(status_code=404, detail="No se encontro al personaje")
 
         if found:
             del list_class_default[i]
             del list_class[k]
-
-
-@router.post("/update")
-async def update(char: Annotated[str, Form()] = None):
-    if not char:
-        raise HTTPException(status_code=400, detail="Error de formulario")
-
-    found = False
-
-    char_dict = loads(char)
-    char = class_char(**char_dict)
-
-    map = {}
-    for x, vx in char.map.items():
-        map[x] = {}
-        for y, vy in vx.items():
-            map[x][int(y)] = vy
-    char.map = map
-
-    for i, x in enumerate(list_class):
-        if x.id == char.id:
-            list_class[i] = char
-            found = True
-            break
-
-    if not found:
-        raise HTTPException(status_code=404, detail="No se encontro al personaje")
-
-
-@router.get("/restart/{id}", status_code=204)
-async def restart(id: int):
-    if not id:
-        raise HTTPException(status_code=400, detail="Error de formulario")
-
-    found = False
-
-    char_def = searchCharDefaultById(id)
-
-    for k, y in enumerate(list_class):
-        if y.id == id:
-            list_class[k] = class_char(**char_def)
-            found = True
-            break
-
-    if not found:
-        raise HTTPException(status_code=404, detail="No se encontro al personaje")
 
 
 @router.get("/checkMove")
@@ -1026,20 +907,23 @@ async def checkMove(x: str, y: int, id: int):
     if not (x or y or id):
         raise HTTPException(status_code=400, detail="Error de formulario")
 
-    char = searchCharById(id)
+    char = await searchCharById(id)
 
     block = char.map[x][y]["kind"]
     if block == "empty":
+        # reviso si es un muro
         try:
             block = char.map[x][y]["layer"]
         except:
             False
     if block == "door":
+        # si la puerta esta abierta lo considero bloque vacio
         if char.map[x][y]["door"]["status"] == 1:
             block = "empty"
     if block == "mob":
         char.mob["loc"] = [x, y]
 
+    # actualizo el mapa
     if id == 1:
         default = {
             "a": {1: {"kind": "wall"}},
@@ -1047,27 +931,30 @@ async def checkMove(x: str, y: int, id: int):
             "c": {1: {"kind": "wall"}},
         }
         if char.map == default:
-            char = updateMapAll(char)
+            char = await updateMapAll(char)
         if block in ["empty", "wall", "trap"]:
             char.loc = [x, y]
     else:
         if block in ["empty", "trap"]:
             char.loc = [x, y]
-            char = updateMap(x, y, char)
+            char = await updateMap(x, y, char)
 
+    # reviso interacciones
     if block != "wall":
-        check = checkInteraction(x, y, block, char)
+        interactions = await checkInteraction(x, y, block, char)
 
-        if check:
-            r = check[0]
-            char = check[1]
+        if interactions:
+            response = interactions["msg_list"]
+            char = interactions["char"]
 
-    await updateChar(char)
+    update = await updateChar(char)
 
-    try:
-        return {"value": r}
-    except:
-        raise HTTPException(status_code=204)
+    if update:
+        try:
+            return {"value": response}
+        except:
+            False
+            # raise HTTPException(status_code=204)
 
 
 @router.get("/handleOption")
@@ -1075,7 +962,7 @@ async def handleOption(x: str, y: int, op: str, id: int):
     if not (x or y or op or id):
         raise HTTPException(status_code=400, detail="Error de formulario")
 
-    char = searchCharById(id)
+    char = await searchCharById(id)
 
     try:
         xy_mob = char.mob["loc"]
@@ -1088,15 +975,18 @@ async def handleOption(x: str, y: int, op: str, id: int):
 
     block = char.map[x][y]["kind"]
     if block == "empty":
+        # reviso si hay trampa
         try:
             map["traps"][x, y]["kind"]
             block = "trap"
         except:
+            # reviso si hay algo en el bloque
             try:
                 block = char.map[x][y]["layer"]
             except:
                 False
 
+    # obtengo el diccionario de opciones para saber como proceden
     if block == "chest":
         op_list = {"y": "openChest", "n": False}
     else:
@@ -1106,12 +996,18 @@ async def handleOption(x: str, y: int, op: str, id: int):
             try:
                 op_list = map["traps"][x, y]["events"][interacted]
             except:
-                raise HTTPException(status_code=204)
+                # si no hay un proceder tomo la opcion
+                # raise HTTPException(status_code=204)
+                raise HTTPException(
+                    status_code=404, detail="No se encontro como procesar la decisión"
+                )
 
     try:
         event = op_list[op]
     except:
-        raise HTTPException(status_code=404, detail="unknown op")
+        raise HTTPException(
+            status_code=404, detail="No se encontro como procede la decisión"
+        )
 
     if event:
         functions = {
@@ -1120,24 +1016,31 @@ async def handleOption(x: str, y: int, op: str, id: int):
             "openDoor": openDoor,
             "activateTrap": activateTrap,
             "specialEvent": specialEvent,
-            "leaveFrom": leaveFrom,
             "fightWith": fightWith,
+            "leaveFrom": leaveFrom,
         }
 
         try:
             handleEvent = functions[event]
         except:
-            raise HTTPException(status_code=405, detail="unknown event")
+            raise HTTPException(
+                status_code=405, detail="No se encontro como manejar la decisión"
+            )
 
-        event_return = handleEvent(x, y, char)
+        event_return = await handleEvent(x, y, char)
 
-        r = event_return[0]
-        new = event_return[1]
+        try:
+            char = event_return["char"]
+            await updateChar(char)
+        except:
+            False
 
-        if new:
-            await updateChar(new)
+        try:
+            response = event_return["msg_list"]
+            return {"value": response}
+        except:
+            False
 
-        return {"value": r}
     else:
         raise HTTPException(status_code=204)
 
@@ -1147,7 +1050,7 @@ async def handleFight(turn: Annotated[str, Form()], id: Annotated[int, Form()]):
     if not (turn or id):
         raise HTTPException(status_code=400, detail="Error de formulario")
 
-    char = searchCharById(id)
+    char = await searchCharById(id)
     turn = loads(turn)
 
     if turn["current"] == "char":
@@ -1198,11 +1101,11 @@ async def endFight(id: int):
     if not id:
         raise HTTPException(status_code=400, detail="Error de formulario")
 
-    char = searchCharById(id)
+    char = await searchCharById(id)
     r = False
 
-    char_def = searchCharDefaultById(id)
-    char.stats["defence"] = char_def["stats"]["defence"]
+    char_default = await searchCharDefaultById(id)
+    char.stats["defence"] = char_default.stats["defence"]
 
     if char.mob["data"].stats["hp"] <= 0:
         char.xp += char.mob["data"].xp
@@ -1237,12 +1140,38 @@ async def endFight(id: int):
         raise HTTPException(status_code=204)
 
 
+@router.post("/update")
+async def update(char: Annotated[str, Form()]):
+    if not char:
+        raise HTTPException(status_code=400, detail="Error de formulario")
+
+    char_dict = loads(char)
+    char = class_char(**char_dict)
+
+    map = {}
+    for x, vx in char.map.items():
+        map[x] = {}
+        for y, vy in vx.items():
+            map[x][int(y)] = vy
+    char.map = map
+
+    found = False
+    for i, x in enumerate(list_class):
+        if x.id == char.id:
+            list_class[i] = char
+            found = True
+            break
+
+    if not found:
+        raise HTTPException(status_code=404, detail="No se encontro al personaje")
+
+
 @router.get("/useConsumable")
 async def useConsumable(id_item: int, id_char: int):
     if not (id_item or id_char):
         raise HTTPException(status_code=400, detail="Error de formulario")
 
-    char = searchCharById(id_char)
+    char = await searchCharById(id_char)
 
     r = False
 
@@ -1291,7 +1220,8 @@ async def useConsumable(id_item: int, id_char: int):
         r = ["No hizo efecto"]
 
     if used:
-        char = updateInventory({item.id: -1}, char)[1]
+        update = await updateInventory({item.id: -1}, char)
+        char = update["char"]
 
     await updateChar(char)
 

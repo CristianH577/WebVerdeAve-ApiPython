@@ -1,13 +1,4 @@
-from pydantic import BaseModel
-
-
-class class_item(BaseModel):
-    id: int
-    name: str
-    kind: str
-    effect: list
-    desc: str
-    quantity: int
+from libs.game.models import class_item
 
 
 list_items = [

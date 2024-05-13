@@ -1,10 +1,6 @@
 from fastapi import APIRouter
-from fastapi import UploadFile, Form, HTTPException
+from fastapi import UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
-
-from typing import Annotated
-
-from json import loads
 
 import io
 
@@ -18,7 +14,7 @@ import seaborn as sns
 router = APIRouter(
     prefix="/analyze",
     tags=["analyze"],
-    responses={404: {"error": "error router analyze"}},
+    responses={404: {"error": "Error de router analisis"}},
 )
 
 
@@ -88,78 +84,70 @@ async def editHeaders(
 
 
 @router.post("/getDtype")
-async def getDtype(rows: list[dict]=None):
+async def getDtype(rows: list[dict]):
     if not rows:
         raise HTTPException(status_code=400, detail="form")
 
-    # df = pd.DataFrame(rows)
-    # print(df)
+    df = pd.DataFrame(rows)
 
-    # response = {"value": await getDtypesData(df)}
+    response = {"value": await getDtypesData(df)}
 
-    # return response
+    return response
 
 
-@router.post("/changeDtype/")
+@router.post("/changeDtype")
 async def changeDtype(
-    rows: Annotated[str, Form()] = None, dtypes: Annotated[str, Form()] = None
+    rows: list[dict],
+    dtypes: dict,
 ):
 
     if not (rows or dtypes):
         raise HTTPException(status_code=400, detail="form")
 
-    data_dicc = loads(rows)
-    df = pd.DataFrame(data_dicc)
-
-    dtypes_dicc = loads(dtypes)
+    df = pd.DataFrame(rows)
 
     try:
-        df1 = df.astype(dtypes_dicc)
+        df1 = df.astype(dtypes)
     except:
         raise HTTPException(
             status_code=404, detail="No se pudieron convertir los datos"
         )
 
-    data = {"rows": df1.to_json(orient="records")}
+    data = {"rows": df1.to_dict(orient="records")}
 
     add_data = await getDtypesData(df1)
     data |= add_data
 
-    response = {"value": data}
-    return response
+    return {"value": data}
 
 
-@router.post("/editRows/")
+@router.post("/editRows")
 async def editRows(
-    rows: Annotated[str, Form()] = None, new_values: Annotated[str, Form()] = None
+    rows: list[dict],
+    new_values: dict,
 ):
     if not (rows or new_values):
         raise HTTPException(status_code=400, detail="form")
 
-    data_dicc = loads(rows)
-    df = pd.DataFrame(data_dicc)
+    df = pd.DataFrame(rows)
 
-    newValuesDIC = loads(new_values)
-
-    for k, v in newValuesDIC.items():
+    for k, v in new_values.items():
         df.loc[df["key"] == int(k), list(v.keys())] = list(v.values())
 
-    response = {"value": df.to_json(orient="records")}
+    data = {"rows": df.to_dict(orient="records")}
 
-    return response
+    return {"value": data}
 
 
-@router.post("/filter/")
+@router.post("/filter")
 async def filter(
-    rows: Annotated[str, Form()] = None, filters: Annotated[str, Form()] = None
+    rows: list[dict],
+    filters: dict,
 ):
     if not (rows or filters):
         raise HTTPException(status_code=400, detail="form")
 
-    data_dicc = loads(rows)
-    df = pd.DataFrame(data_dicc)
-
-    filters = loads(filters)
+    df = pd.DataFrame(rows)
 
     cols = []
     if filters["cols"] != "":
@@ -181,8 +169,7 @@ async def filter(
         def evaluate(x):
             t = isinstance(x, str)
             if t:
-                e = filters["text"] in x
-                return e
+                return filters["text"].lower() in x.lower()
             return False
 
     mask = pd.DataFrame()
@@ -203,18 +190,17 @@ async def filter(
 
         df["hl"] = mask.apply(getHlCols, axis=1)
 
-    return {"value": df.to_json(orient="records")}
+    return {"value": {"rows": df.to_dict(orient="records")}}
 
 
 # process -------------------------------------
-@router.post("/info/")
-async def info(rows: Annotated[str, Form()] = None):
+@router.post("/info")
+async def info(rows: list[dict]):
 
     if not rows:
         raise HTTPException(status_code=400, detail="form")
 
-    data_dicc = loads(rows)
-    df = pd.DataFrame(data_dicc)
+    df = pd.DataFrame(rows)
     df.drop("key", axis=1, inplace=True)
 
     buf = io.StringIO()
@@ -228,19 +214,17 @@ async def info(rows: Annotated[str, Form()] = None):
 
     df_info["key"] = df_info["Column"]
 
-    response = {"value": {"cols": cols, "rows": df_info.to_json(orient="records")}}
+    response = {"value": {"cols": cols, "rows": df_info.to_dict(orient="records")}}
 
     return response
 
 
-@router.post("/describe/")
-async def describe(rows: Annotated[str, Form()] = None):
-
+@router.post("/describe")
+async def describe(rows: list[dict]):
     if not rows:
         raise HTTPException(status_code=400, detail="form")
 
-    data_dicc = loads(rows)
-    df = pd.DataFrame(data_dicc)
+    df = pd.DataFrame(rows)
 
     describe = df.describe(include="all")
 
@@ -253,19 +237,19 @@ async def describe(rows: Annotated[str, Form()] = None):
     cols = list(df.columns)
     cols.remove("key")
 
-    response = {"value": {"cols": cols, "rows": df.to_json(orient="records")}}
+    df = df.fillna("")
+
+    response = {"value": {"cols": cols, "rows": df.to_dict(orient="records")}}
 
     return response
 
 
-@router.post("/isnull/")
-async def isnull(rows: Annotated[str, Form()] = None):
-
+@router.post("/isnull")
+async def isnull(rows: list[dict]):
     if not rows:
         raise HTTPException(status_code=400, detail="form")
 
-    data_dicc = loads(rows)
-    df = pd.DataFrame(data_dicc)
+    df = pd.DataFrame(rows)
 
     df_isnull = df.isnull()
     df_isnull["key"] = df_isnull.index
@@ -273,19 +257,17 @@ async def isnull(rows: Annotated[str, Form()] = None):
     cols = list(df_isnull.columns)
     cols.remove("key")
 
-    response = {"value": {"cols": cols, "rows": df_isnull.to_json(orient="records")}}
+    response = {"value": {"cols": cols, "rows": df_isnull.to_dict(orient="records")}}
 
     return response
 
 
-@router.post("/notnull/")
-async def notnull(rows: Annotated[str, Form()] = None):
-
+@router.post("/notnull")
+async def notnull(rows: list[dict]):
     if not rows:
         raise HTTPException(status_code=400, detail="form")
 
-    data_dicc = loads(rows)
-    df = pd.DataFrame(data_dicc)
+    df = pd.DataFrame(rows)
 
     df_notnull = df.notnull()
     df_notnull["key"] = df_notnull.index
@@ -293,59 +275,57 @@ async def notnull(rows: Annotated[str, Form()] = None):
     cols = list(df_notnull.columns)
     cols.remove("key")
 
-    response = {"value": {"cols": cols, "rows": df_notnull.to_json(orient="records")}}
+    response = {"value": {"cols": cols, "rows": df_notnull.to_dict(orient="records")}}
 
     return response
 
 
 # Graphs -------------------------------------
-@router.post("/createImgPost/")
-async def createImgPost(
-    rows: Annotated[str, Form()] = None, preferences: Annotated[str, Form()] = None
-):
-
+@router.post("/makeGraph/")
+async def makeGraph(rows: list[dict], preferences: dict):
     if not (rows or preferences):
         raise HTTPException(status_code=400, detail="form")
-
-    rows = loads(rows)
-    preferences = loads(preferences)
 
     df = pd.DataFrame(rows)
 
     x = ""
     y = ""
     plot = False
-    x = preferences["ejex"][0]
-    if preferences["ejey"] != []:
-        y = preferences["ejey"][0]
+    x = preferences["axisX"][0]
+    if preferences["axisY"] != []:
+        y = preferences["axisY"][0]
 
     graph = preferences["type"]
 
-    if graph == "bar":
-        if y == ("" or "quantity"):
-            data = df[preferences["ejex"]].value_counts()
+    try:
+        if graph == "bar":
+            if y == ("" or "quantity"):
+                data = df[preferences["axisX"]].value_counts()
+                x = data.index.get_level_values(0).to_list()
+                y = data.tolist()
+
+            plot = sns.barplot(data=df, x=x, y=y)
+        elif graph == "hist":
+            plot = sns.histplot(data=df, x=x)
+        elif graph == "pie":
+            plot = True
+
+            data = df[preferences["axisX"]].value_counts()
             x = data.index.get_level_values(0).to_list()
             y = data.tolist()
 
-        plot = sns.barplot(data=df, x=x, y=y)
-    elif graph == "hist":
-        plot = sns.histplot(data=df, x=x)
-    elif graph == "pie":
-        plot = True
+            plt.pie(y, labels=x, autopct="%.0f%%")
+        elif graph == "boxplot":
+            plot = sns.boxplot(data=df, x=x)
+        elif graph == "scatter":
+            plot = sns.regplot(data=df, x=x, y=y)
+        elif graph == "line":
+            plot = sns.lineplot(data=df, x=x, y=y)
+        elif graph == "corr":
+            plot = sns.heatmap(df.corr())
 
-        data = df[preferences["ejex"]].value_counts()
-        x = data.index.get_level_values(0).to_list()
-        y = data.tolist()
-
-        plt.pie(y, labels=x, autopct="%.0f%%")
-    elif graph == "boxplot":
-        plot = sns.boxplot(data=df, x=x)
-    elif graph == "scatter":
-        plot = sns.regplot(data=df, x=x, y=y)
-    elif graph == "line":
-        plot = sns.lineplot(data=df, x=x, y=y)
-    elif graph == "corr":
-        plot = sns.heatmap(df.corr())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     if plot != False:
         buffer = io.BytesIO()
@@ -361,4 +341,4 @@ async def createImgPost(
         response = StreamingResponse(buffer, media_type="image/png")
         plt.clf()
 
-    return response
+        return response

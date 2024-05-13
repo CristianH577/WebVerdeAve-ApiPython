@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import chars, analyze
+from routers import game, analyze, mechanics
 
 
 #  -----------------------------------------------------------------------------------------
@@ -19,8 +19,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(chars.router)
+app.include_router(game.router)
 app.include_router(analyze.router)
+app.include_router(mechanics.router)
 
 
 # methods --------------------------------------------------------------------------------
